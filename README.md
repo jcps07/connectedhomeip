@@ -192,7 +192,7 @@ platforms to help ensure Matter’s scalability.
 # How to Contribute
 
 We welcome your contributions to Matter. Read our contribution guidelines
-[here](./CONTRIBUTING.md).
+[here](./CONTRIBUTING.md). 
 
 # Building and Developing in Matter
 
