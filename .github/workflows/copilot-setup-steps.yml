@@ -1,0 +1,98 @@
+name: "Copilot Setup Steps"
+
+# Run automatically when this file changes, and allow manual triggers.
+on:
+    workflow_dispatch:
+    push:
+        paths:
+            - .github/workflows/copilot-setup-steps.yml
+    pull_request:
+        paths:
+            - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+    # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
+    copilot-setup-steps:
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: read
+
+        timeout-minutes: 45
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  submodules: false
+
+            # Install system-level build dependencies for the Matter (CHIP) SDK.
+            # These mirror the packages present in ghcr.io/project-chip/chip-build.
+            - name: Install system dependencies
+              run: |
+                  sudo apt-get update -qq
+                  sudo apt-get install -y --no-install-recommends \
+                      build-essential \
+                      clang \
+                      clang-format \
+                      cmake \
+                      curl \
+                      git \
+                      git-lfs \
+                      golang \
+                      libdbus-1-dev \
+                      libglib2.0-dev \
+                      libssl-dev \
+                      ninja-build \
+                      pkg-config \
+                      python3 \
+                      python3-dev \
+                      python3-pip \
+                      python3-venv \
+                      unzip \
+                      wget
+
+            # Set up Python 3.11 explicitly since some Matter tooling pins to it.
+            - name: Set up Python 3.11
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
+            # Install the minimal Python packages needed to run build scripts,
+            # code-generation tools (ZAP idl), and linters.
+            - name: Install Python build requirements
+              run: |
+                  pip install --upgrade pip
+                  pip install \
+                      click \
+                      jinja2 \
+                      lark \
+                      stringcase \
+                      flake8 \
+                      black \
+                      isort
+
+            # Restore the bootstrap cache (pigweed + CIPD packages) if available.
+            - name: Restore bootstrap cache
+              uses: actions/cache@v4
+              with:
+                  key: ${{ runner.os }}-matter-bootstrap-${{ hashFiles('scripts/setup/**', 'third_party/pigweed/**') }}
+                  restore-keys: |
+                      ${{ runner.os }}-matter-bootstrap-
+                  path: |
+                      .environment
+                      build_overrides/pigweed_environment.gni
+
+            # Check out only the submodules needed for a Linux host build.
+            # Using --shallow reduces clone time significantly.
+            - name: Checkout linux submodules
+              run: |
+                  scripts/checkout_submodules.py \
+                      --allow-changing-global-git-config \
+                      --shallow \
+                      --platform linux
+
+            # Bootstrap the Matter SDK environment (sets up the Python venv,
+            # downloads pigweed and CIPD toolchain packages, etc.).
+            - name: Bootstrap Matter SDK
+              run: bash scripts/bootstrap.sh -p all,linux
